@@ -17,15 +17,15 @@ db = SQLAlchemy(app)
 
 
 class Users(db.Model):
-    user_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    username = db.Column(db.String(20), unique=True, nullable=False)
-    password = db.Column(db.String, nullable=False)
+    user_id = db.Column(db.String, primary_key=True, unique=True)
+    username = db.Column(db.String, nullable=False)
     profile_picture = db.Column(db.String, nullable=True)
     
 
-    def __init__(self, username, password):
+    def __init__(self, user_id, username, profile_picture):
+        self.user_id = user_id
         self.username = username
-        self.password = password
+        self.profile_picture = profile_picture
 
 
     def serialize(self):
@@ -35,18 +35,27 @@ class Users(db.Model):
             "profile_picture":self.profile_picture
         }
 
+    def is_authenticated(self):
+        return True
+    def is_active(self):
+        return True
+    def is_anonymous(self):
+        return False
+    def get_id(self):
+        return str(self.user_id)
+
 
 class Message(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    sender_username = db.Column(db.String(20), db.ForeignKey('users.username'))
-    reciever_username = db.Column(db.String(20), db.ForeignKey('users.username'))
+    sender_id = db.Column(db.String, db.ForeignKey('users.user_id'))
+    reciever_id = db.Column(db.String, db.ForeignKey('users.user_id'))
     content = db.Column(db.String, nullable=False)
     timestamp = db.Column(db.DateTime)
     read = db.Column(db.Boolean)
 
-    def __init__(self, sender_username, reciever_username, content, read=False, timestamp=datetime.datetime.now()):
-        self.sender_username = sender_username
-        self.reciever_username = reciever_username
+    def __init__(self, sender_id, reciever_id, content, read=False, timestamp=datetime.datetime.now()):
+        self.sender_id = sender_id
+        self.reciever_id = reciever_id
         self.content = content
         self.timestamp = timestamp
         self.read = read
@@ -54,12 +63,11 @@ class Message(db.Model):
     def serialize(self):
         return {
             "id":self.id,
-            "sender_username":self.sender_username,
-            "reciever_username":self.reciever_username,
+            "sender_id":self.sender_id,
+            "reciever_id":self.reciever_id,
             "content":self.content,
             "timestamp": self.timestamp.strftime("%b %d %Y,  %I:%M %p"),
             "read":self.read
         }
-
 
 
