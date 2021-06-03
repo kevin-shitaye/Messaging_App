@@ -51,7 +51,7 @@ message_args.add_argument("content", type=str, help="This is the content")
 # arguments that need to be passed for User
 user_args = reqparse.RequestParser()
 user_args.add_argument("username", type=str, help="This is the username")
-user_args.add_argument("picture",type=werkzeug.datastructures.FileStorage, help="This is the profile picture",location='files')
+user_args.add_argument("picture", type=werkzeug.datastructures.FileStorage, help="This is the profile picture",location='files')
 
 
 # documentation
@@ -117,25 +117,19 @@ class UserSchema(Resource):
         google_id_info = id_token.verify_oauth2_token(request.headers["tokenId"], google.auth.transport.requests.Request(session))
         if google_id_info:
             if user_id == google_id_info['sub']:
+                
                 user = Users.query.filter(Users.user_id==user_id).first()
-                #upload an image
-                if request.files['picture']:
+                print(2)
+                # upload an image
+                if args['picture']:
                     file = request.files['picture']
                     file.save("./static/" + file.filename)
                     user.profile_picture = "/static/" + user_id + file.filename
-
+                print(2)
                 #change username
                 if args["username"]:
+                    print(3)
                     user.username = args["username"]
-                    #reflect these change to the messages history of others
-                    messagesTo = Message.query.filter((Message.sender_id==user_id))
-                    messagesFrom = Message.query.filter((Message.reciever_id==user_id))
-                    for message in messagesTo:
-                        message.sender_username = args["username"]
-                        db.session.add(message)
-                    for message in messagesFrom:
-                        message.reciever_username =args["username"]
-                        db.session.add(message)
                 db.session.add(user)
                 db.session.commit()
                 return "Updated"
