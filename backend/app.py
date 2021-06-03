@@ -136,6 +136,12 @@ class UserSchema(Resource):
             return "UNATHOTIZED Request: Can't update inforamtion of another user", 401
         return "UNATHOTIZED", 401
 
+class SearchUsers(Resource):
+    def get(self, keyword):
+        users = Users.query.filter(Users.username.ilike(f"{keyword}%")).all()
+        return [user.serialize() for user in users]
+
+
 class ChattedWithSchema(Resource):
     def get(self):
  
@@ -160,6 +166,7 @@ class ChattedWithSchema(Resource):
 api.add_resource(RegisterUser, "/api/authorize/<token>")
 api.add_resource(MessageSchema, '/api/messages/<reciever_id>')
 api.add_resource(UserSchema, '/api/users/<user_id>')
+api.add_resource(SearchUsers, '/api/search_users/<keyword>')
 api.add_resource(ChattedWithSchema, '/api/chatted_with')
 
 
