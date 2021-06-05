@@ -5,9 +5,9 @@ from flask import Flask, jsonify, request, abort, session
 from flask.helpers import url_for
 from flask.templating import render_template
 from flask_restful import Api, Resource, reqparse
-# from flask_socketio import SocketIO, emit
+from flask_socketio import SocketIO, emit, send, join_room, leave_room
 from flask_cors import CORS
-# import asyncio
+import asyncio
 from models import Users, Message, db
 from settings import *
 import werkzeug
@@ -26,23 +26,11 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = SQLALCHEMY_TRACK_MODIFICATIONS
 
 
 CORS(app, supports_credentials=True)
-# socketio = SocketIO(app, cors_allowed_origins="*")
-# main_event_loop = asyncio.get_event_loop()
+socketio = SocketIO(app, cors_allowed_origins="*")
+main_event_loop = asyncio.get_event_loop()
 
 api = Api(app)
 db.init_app(app)
-
-# os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
-
-# GOOGLE_CLIENT_ID = "636882182686-ble33a9v9s7i94pauspdbs5hg4s4dgvl.apps.googleusercontent.com"
-# client_secrets_file = os.path.join(pathlib.Path(__file__).parent, "client_secrets_file.json")
-
-# flow = Flow.from_client_secrets_file(
-#     client_secrets_file=client_secrets_file,
-#     scopes=["https://www.googleapis.com/auth/userinfo.profile", "https://www.googleapis.com/auth/userinfo.email", "openid"],
-#     redirect_uri="http://127.0.0.1:5000/callback"
-# )
-
 
 
 # arguments that need to be passed for Message
@@ -119,16 +107,13 @@ class UserSchema(Resource):
             if user_id == google_id_info['sub']:
                 
                 user = Users.query.filter(Users.user_id==user_id).first()
-                print(2)
                 # upload an image
                 if args['picture']:
                     file = request.files['picture']
-                    file.save("./static/" + file.filename)
+                    file.save("./static/" + user_id + file.filename)
                     user.profile_picture = "/static/" + user_id + file.filename
-                print(2)
                 #change username
                 if args["username"]:
-                    print(3)
                     user.username = args["username"]
                 db.session.add(user)
                 db.session.commit()
@@ -139,7 +124,7 @@ class UserSchema(Resource):
 class SearchUsers(Resource):
     def get(self, keyword):
         users = Users.query.filter(Users.username.ilike(f"{keyword}%")).all()
-        return [user.serialize() for user in users]
+        return jsonify([user.serialize() for user in users])
 
 
 class ChattedWithSchema(Resource):
@@ -186,6 +171,35 @@ api.add_resource(ChattedWithSchema, '/api/chatted_with')
 #     main_event_loop.run_until_complete(socketio.emit("announce message2", msg, broadcast=True))
 
 
+
+@socketio.on('incoming-msg')
+def on_message(data):
+    msg = data["msg"]
+    username = data["username"]
+    room = data["room"]
+    send({"username": username, "msg": msg}, room=room)
+
+
+@socketio.on('join')
+def on_join(data):
+    """User joins a room"""
+
+    username = data["username"]
+    room = data["room"]
+    join_room(room)
+
+    # Broadcast that new user has joined
+    return f"{username} joined {room} "
+
+
+@socketio.on('leave')
+def on_leave(data):
+    """User leaves a room"""
+
+    username = data['username']
+    room = data['room']
+    leave_room(room)
+    return f"{username} left {room} "
 
 if __name__ == "__main__":
     app.run(debug=True)
