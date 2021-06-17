@@ -14,6 +14,7 @@ import werkzeug
 from google.oauth2 import id_token
 from pip._vendor import cachecontrol
 import google.auth.transport.requests
+from sqlalchemy import or_
 
 
 
@@ -75,6 +76,7 @@ class MessageSchema(Resource):
             messagesfrom = Message.query.filter(Message.sender_id==reciever_id, Message.reciever_id==google_id_info['sub']).all()
             messages = messagesto + messagesfrom
             messages = set(messages) 
+            messages = sorted(messages, key = lambda i: i.id)
             return jsonify([x.serialize() for x in messages]) 
         return "UNATHOTIZED", 401
 
@@ -89,7 +91,7 @@ class MessageSchema(Resource):
                 new_message = Message(sender_id=google_id_info['sub'], reciever_id=reciever_id, content=args["content"])
                 db.session.add(new_message)
                 db.session.commit()
-                return "message sent"
+                return jsonify(new_message.serialize())
             return "User does not exists" , 400
         return "UNATHOTIZED", 401
 
@@ -98,7 +100,8 @@ class UserSchema(Resource):
         user = Users.query.filter(Users.user_id==user_id).first()
         if user == None:
             return "User does not exist", 400
-        return jsonify(user.serialize()) 
+        return jsonify(user.serialize())
+        
 
     def put(self, user_id):
         args = user_args.parse_args()
@@ -123,7 +126,7 @@ class UserSchema(Resource):
 
 class SearchUsers(Resource):
     def get(self, keyword):
-        users = Users.query.filter(Users.username.ilike(f"{keyword}%")).all()
+        users = Users.query.filter(Users.username.ilike(f"{keyword}%"), Users.user_id != request.headers["user_id"]).all()
         return jsonify([user.serialize() for user in users])
 
 
@@ -135,21 +138,36 @@ class ChattedWithSchema(Resource):
             messagesTo = Message.query.filter((Message.sender_id==google_id_info['sub'])).all()
             messagesFrom = Message.query.filter((Message.reciever_id==google_id_info['sub'])).all()
             chatted_with = set() #a set to avoid repition
-            for message in messagesTo:
+            messages = messagesTo + messagesFrom
+            messages = set(messages) 
+            messages = sorted(messages, key = lambda i: i.id)
+            for message in messages:
                 if(message.reciever_id):
                     chatted_with.add(message.reciever_id)
-                
-            for message in messagesFrom:
-                if(message.sender_id):
                     chatted_with.add(message.sender_id)
+                
+                chatted_with.remove(request.headers["user_id"])
 
             return jsonify(list(chatted_with))
 
+class LastMessageSchema(Resource):
+    def get(self, reciever_id):
+        google_id_info = id_token.verify_oauth2_token(request.headers["tokenId"], google.auth.transport.requests.Request(session))
+        if google_id_info:
+            messagesto = Message.query.filter(Message.sender_id==google_id_info['sub'], Message.reciever_id==reciever_id).all()
+            messagesfrom = Message.query.filter(Message.sender_id==reciever_id, Message.reciever_id==google_id_info['sub']).all()
+            messages = messagesto + messagesfrom
+            messages = set(messages) 
+            messages = sorted(messages, key = lambda i: i.id)
+            last = list(messages)[-1]
+            return jsonify(last.serialize()) 
+        return "UNATHOTIZED", 401
 
 
 # API Endpoints
 api.add_resource(RegisterUser, "/api/authorize/<token>")
 api.add_resource(MessageSchema, '/api/messages/<reciever_id>')
+api.add_resource(LastMessageSchema, '/api/messages/<reciever_id>/last')
 api.add_resource(UserSchema, '/api/users/<user_id>')
 api.add_resource(SearchUsers, '/api/search_users/<keyword>')
 api.add_resource(ChattedWithSchema, '/api/chatted_with')
@@ -177,7 +195,10 @@ def on_message(data):
     msg = data["msg"]
     username = data["username"]
     room = data["room"]
+    sender = data["sender_id"]
     send({"username": username, "msg": msg}, room=room)
+    send({"username": username, "msg": msg}, room=sender)
+    
 
 
 @socketio.on('join')

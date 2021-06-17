@@ -66,8 +66,9 @@ class Message(db.Model):
             "sender_id":self.sender_id,
             "reciever_id":self.reciever_id,
             "content":self.content,
-            "timestamp": self.timestamp.strftime("%b %d %Y,  %I:%M %p"),
+            "timestamp": self.timestamp,
             "read":self.read
         }
 
-
+# db.drop_all()
+# db.create_all()
